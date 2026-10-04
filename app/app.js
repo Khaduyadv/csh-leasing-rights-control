@@ -1,62 +1,38 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-const S = { cbld:null, cskh:null, cases:[], current:null, sessionId:crypto.randomUUID() };
-const q = id => document.getElementById(id);
-const show = id => ['selector','workspace','detail'].forEach(x=>q(x).classList.toggle('active',x===id));
-const esc = v => String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+const supabase=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+const S={cbld:null,cskh:null,active:[],completed:[],filter:'all',current:null,sessionId:crypto.randomUUID()};
+const q=id=>document.getElementById(id);
+const show=id=>['selector','workspace','detail'].forEach(x=>q(x).classList.toggle('active',x===id));
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
-async function ensureAuth(){
-  const { data:{session} } = await supabase.auth.getSession();
-  if(session) return;
-  const { error } = await supabase.auth.signInAnonymously();
-  if(error) throw new Error('Cần bật Anonymous Sign-Ins trên Supabase.');
-}
-async function rpc(name,params={}){ await ensureAuth(); const {data,error}=await supabase.rpc(name,params); if(error) throw error; return data; }
+async function ensureAuth(){const {data:{session}}=await supabase.auth.getSession();if(session)return;const {error}=await supabase.auth.signInAnonymously();if(error)throw new Error('Anonymous Sign-Ins chưa sẵn sàng.');}
+async function rpc(name,params={}){await ensureAuth();const {data,error}=await supabase.rpc(name,params);if(error)throw error;return data;}
 
-async function init(){
-  const rows = await rpc('csh_get_workspace_selectors');
-  q('cbld').innerHTML='<option value="">Chọn CBLĐ</option>'+rows.map(x=>`<option>${esc(x.cbld_name)}</option>`).join('');
-  q('cbld').onchange=()=>{
-    S.cbld=q('cbld').value||null; S.cskh=null; q('enter').disabled=true;
-    const names=(rows.find(x=>x.cbld_name===S.cbld)?.cskh_names)||[];
-    q('cskh').disabled=!S.cbld;
-    q('cskh').innerHTML='<option value="">Chọn CSKH</option>'+names.map(x=>`<option>${esc(x)}</option>`).join('');
-  };
-  q('cskh').onchange=()=>{ S.cskh=q('cskh').value||null; q('enter').disabled=!(S.cbld&&S.cskh); };
-}
+function priority(c){const d=Number(c.computed_days_to_cktt);if(d<0)return 0;if(d<=7)return 1;if(d<=15)return 2;if(d<=30)return 3;return 4;}
+function sortCases(rows){return [...rows].sort((a,b)=>priority(a)-priority(b)||Number(a.computed_days_to_cktt)-Number(b.computed_days_to_cktt)||String(a.shop_id).localeCompare(String(b.shop_id),'vi'));}
 
-async function load(mode='active'){
-  const fn=mode==='completed'?'csh_get_completed_cases':'csh_get_workspace';
-  S.cases=await rpc(fn,{p_cbld:S.cbld,p_cskh:S.cskh})||[];
-  renderList();
-}
-function renderList(){
-  q('who').textContent=S.cskh; q('supervisor').textContent=`CBLĐ: ${S.cbld}`;
-  q('count-active').textContent=S.cases.length;
-  q('count-issue').textContent=S.cases.filter(x=>x.need_cbld_support||['NEW','IN_PROGRESS'].includes(x.issue_status)).length;
-  q('count-overdue').textContent=S.cases.filter(x=>Number(x.computed_days_to_cktt)<0).length;
-  q('cases').innerHTML=S.cases.map(c=>{
-    const d=Number(c.computed_days_to_cktt); const t=d<0?`Quá hạn ${Math.abs(d)} ngày`:`T-${d}`;
-    return `<article class="case-card" data-shop="${esc(c.shop_id)}"><div class="top"><h3>${esc(c.shop_id)}</h3><span class="badge">${esc(t)}</span></div><div class="meta">HĐT2: ${esc(branch(c.computed_hdt2_branch))}</div><div class="next">${esc(c.computed_next_action||'Chưa xác định')}</div>${c.computed_warning_code?`<div class="warn ${esc(c.computed_warning_level)}">${esc(warning(c.computed_warning_code))}</div>`:''}</article>`;
-  }).join('');
-  document.querySelectorAll('.case-card').forEach(el=>el.onclick=()=>openCase(el.dataset.shop));
-}
+async function init(){const rows=await rpc('csh_get_workspace_selectors');q('cbld').innerHTML='<option value="">Chọn CBLĐ</option>'+rows.map(x=>`<option>${esc(x.cbld_name)}</option>`).join('');q('cbld').onchange=()=>{S.cbld=q('cbld').value||null;S.cskh=null;q('enter').disabled=true;const names=rows.find(x=>x.cbld_name===S.cbld)?.cskh_names||[];q('cskh').disabled=!S.cbld;q('cskh').innerHTML='<option value="">Chọn CSKH</option>'+names.map(x=>`<option>${esc(x)}</option>`).join('');};q('cskh').onchange=()=>{S.cskh=q('cskh').value||null;q('enter').disabled=!(S.cbld&&S.cskh);};}
 
-async function openCase(shopId){ S.current=await rpc('csh_get_case',{p_shop_id:shopId}); const c=S.current.case||{}; q('detail-shop').textContent=shopId; q('detail-state').textContent=c.computed_next_action||''; renderCase(c); show('detail'); }
-function opt(field,label,value,items){ return `<div class="field"><label>${esc(label)}</label><select data-field="${field}"><option value="">—</option>${items.map(([v,t])=>`<option value="${v}" ${String(value??'')===String(v)?'selected':''}>${esc(t)}</option>`).join('')}</select></div>`; }
-function renderCase(c){
-  q('detail-body').innerHTML=`<section class="section"><h2>Tình trạng hiện tại</h2><div class="readonly">Cam kết tiền thuê: ${esc(c.cktt_end_date||'—')}</div><div class="readonly">HĐT2: ${esc(branch(c.computed_hdt2_branch))}</div><div class="readonly">Việc tiếp theo: ${esc(c.computed_next_action||'—')}</div></section><section class="section"><h2>Cập nhật xử lý</h2>${opt('handover_check_status','Kiểm tra mặt bằng',c.handover_check_status,[['NOT_CHECKED','Chưa kiểm tra'],['CHECKED','Đã kiểm tra']])}${opt('handover_condition','So với điều kiện bàn giao khai thác',c.handover_condition,[['BELOW_STANDARD','Dưới'],['MEETS_STANDARD','Đạt'],['ABOVE_STANDARD','Tốt hơn']])}${opt('repair_status','Xử lý mặt bằng',c.repair_status,[['NOT_REQUIRED','Không cần'],['RECORDED','Đã ghi nhận'],['IN_REPAIR','Đang sửa chữa'],['COMPLETED','Đã hoàn thiện']])}${opt('debt_status','Công nợ',c.debt_status,[['UNKNOWN','Chưa xác định'],['PENDING','Đang xử lý'],['CLEARED','Đã xử lý'],['NOT_APPLICABLE','Không áp dụng']])}${opt('document_status','Hồ sơ',c.document_status,[['UNKNOWN','Chưa xác định'],['PENDING','Đang xử lý'],['COMPLETE','Hoàn tất'],['NOT_APPLICABLE','Không áp dụng']])}${opt('bql_confirmation_status','Ban quản lý xác nhận',c.bql_confirmation_status,[['PENDING','Chưa'],['CONFIRMED','Đã xác nhận'],['NOT_APPLICABLE','Không áp dụng']])}</section><section class="section"><h2>Vướng mắc / đề xuất</h2><div class="field"><label>Loại vướng mắc</label><input data-field="issue_type" value="${esc(c.issue_type||'')}"></div><div class="field"><label>Nội dung</label><textarea data-field="issue_text">${esc(c.issue_text||'')}</textarea></div><div class="field"><label>Đề xuất xử lý</label><textarea data-field="proposal_text">${esc(c.proposal_text||'')}</textarea></div>${opt('issue_priority','Mức độ',c.issue_priority,[['NORMAL','Bình thường'],['SOON','Cần xử lý sớm'],['URGENT','Khẩn']])}${opt('need_cbld_support','Cần CBLĐ hỗ trợ',String(c.need_cbld_support),[['false','Không'],['true','Có']])}</section><div class="actions"><button id="save">Lưu cập nhật</button></div>`;
-  q('save').onclick=saveCase;
-}
-async function saveCase(){
-  const changes={}; document.querySelectorAll('#detail-body [data-field]').forEach(el=>{ if(el.value!=='') changes[el.dataset.field]=el.dataset.field==='need_cbld_support'?el.value==='true':el.value; });
-  await rpc('csh_update_case',{p_shop_id:S.current.case.shop_id,p_cbld:S.cbld,p_cskh:S.cskh,p_session_id:S.sessionId,p_changes:changes}); await load(); show('workspace');
-}
-function branch(v){return ({BEFORE_CKTT:'Hết trước Cam kết tiền thuê',SAME_AS_CKTT:'Hết cùng Cam kết tiền thuê',AFTER_CKTT:'Còn hiệu lực sau Cam kết tiền thuê',NO_HDT2:'Không có HĐT2',DATA_EXCEPTION:'Cần rà soát dữ liệu'})[v]||'Chưa xác định';}
-function warning(v){return ({HDT2_DATA_EXCEPTION:'Dữ liệu HĐT2 cần rà soát',CKTT_OVERDUE:'Đã quá hạn Cam kết tiền thuê',CBLD_SUPPORT_REQUIRED:'Cần CBLĐ hỗ trợ',NO_PROGRESS_10D:'Không có tiến triển 10 ngày',CKTT_T7:'Còn tối đa 7 ngày',CKTT_T15:'Còn tối đa 15 ngày'})[v]||v;}
+async function loadAll(){S.active=sortCases(await rpc('csh_get_workspace',{p_cbld:S.cbld,p_cskh:S.cskh})||[]);S.completed=await rpc('csh_get_completed_cases',{p_cbld:S.cbld,p_cskh:S.cskh})||[];renderList();}
+function rowsForFilter(){if(S.filter==='completed')return S.completed;if(S.filter==='issue')return S.active.filter(x=>x.need_cbld_support||['NEW','IN_PROGRESS'].includes(x.issue_status)||x.computed_warning_code==='HDT2_DATA_EXCEPTION');return S.active;}
+function renderList(){q('who').textContent=S.cskh;q('supervisor').textContent=`CBLĐ: ${S.cbld}`;q('count-active').textContent=S.active.length;q('count-issue').textContent=S.active.filter(x=>x.need_cbld_support||['NEW','IN_PROGRESS'].includes(x.issue_status)).length;q('count-overdue').textContent=S.active.filter(x=>Number(x.computed_days_to_cktt)<0).length;const rows=rowsForFilter();q('empty').hidden=rows.length>0;q('cases').innerHTML=rows.map(card).join('');document.querySelectorAll('.case-card').forEach(el=>el.onclick=()=>openCase(el.dataset.shop,S.filter==='completed'));}
+function card(c){const d=Number(c.computed_days_to_cktt);const t=d<0?`Quá hạn ${Math.abs(d)} ngày`:`T-${d}`;const after=c.computed_hdt2_branch==='AFTER_CKTT';return `<article class="case-card ${Number(c.computed_days_to_cktt)<0?'overdue':''}" data-shop="${esc(c.shop_id)}"><div class="top"><div><h3>${esc(c.shop_id)}</h3><div class="sub">${esc(c.project_code||c.zone||'')}</div></div><span class="badge">${esc(t)}</span></div><div class="branch ${after?'branch-after':''}">${esc(branch(c.computed_hdt2_branch))}</div><div class="next-label">Việc tiếp theo</div><div class="next">${esc(c.computed_next_action||'Chưa xác định')}</div>${renderWarning(c)}</article>`;}
+function renderWarning(c){if(!c.computed_warning_code||c.computed_warning_code==='NO_PROGRESS_10D')return '';return `<div class="warn ${esc(c.computed_warning_level)}">${esc(warning(c.computed_warning_code))}</div>`;}
 
-q('enter').onclick=async()=>{await load();show('workspace');}; q('back').onclick=()=>show('selector'); q('detail-back').onclick=()=>show('workspace');
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=async()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');await load(b.dataset.filter==='completed'?'completed':'active');});
+async function openCase(shopId,readOnly=false){S.current=await rpc('csh_get_case',{p_shop_id:shopId});S.current.readOnly=readOnly;const c=S.current.case||{};q('detail-shop').textContent=shopId;q('detail-state').textContent=readOnly?'Đã hoàn tất':(c.computed_next_action||'');renderCase(c);show('detail');}
+function opt(field,label,value,items,disabled=false){return `<div class="field"><label>${esc(label)}</label><select data-field="${field}" ${disabled?'disabled':''}><option value="">—</option>${items.map(([v,t])=>`<option value="${v}" ${String(value??'')===String(v)?'selected':''}>${esc(t)}</option>`).join('')}</select></div>`;}
+function textField(field,label,value,disabled=false,area=false){return `<div class="field"><label>${esc(label)}</label>${area?`<textarea data-field="${field}" ${disabled?'disabled':''}>${esc(value||'')}</textarea>`:`<input data-field="${field}" value="${esc(value||'')}" ${disabled?'disabled':''}>`}</div>`;}
+function renderCase(c){const ro=!!S.current.readOnly;const ex=S.current.exceptions||[];const after=c.computed_hdt2_branch==='AFTER_CKTT';const exceptionHtml=ex.length?`<section class="section exception"><h2>Cần xác minh</h2>${ex.map(e=>`<div class="exception-item"><strong>${esc(e.exception_code)}</strong><p>${esc(e.description)}</p></div>`).join('')}</section>`:'';const facts=`<section class="section"><h2>Tình trạng hiện tại</h2><div class="fact"><span>CKTT</span><strong>${esc(c.cktt_end_date||'—')}</strong></div><div class="fact"><span>HĐT2</span><strong>${esc(branch(c.computed_hdt2_branch))}</strong></div>${c.relevant_hdt2_end_date?`<div class="fact"><span>Hết HĐT2</span><strong>${esc(c.relevant_hdt2_end_date)}</strong></div>`:''}<div class="action-box"><span>Việc tiếp theo</span><strong>${esc(c.computed_next_action||'—')}</strong></div></section>`;
+const branchForm=after?`<section class="section"><h2>Chuyển tiếp HĐT2</h2>${opt('hdt2_transition_status','Trạng thái chuyển tiếp',c.hdt2_transition_status,[['PENDING','Chưa hoàn tất'],['RIGHTS_OBLIGATIONS_DONE','Đã xử lý quyền/nghĩa vụ'],['DEPOSIT_DONE','Đã xử lý tiền đặt cọc'],['THREE_PARTY_CONFIRMED','Đã xác nhận 3 bên'],['COMPLETE','Hoàn tất chuyển tiếp']],ro)}</section>`:`<section class="section"><h2>Mặt bằng bàn giao</h2>${opt('handover_check_status','Kiểm tra mặt bằng',c.handover_check_status,[['NOT_CHECKED','Chưa kiểm tra'],['CHECKED','Đã kiểm tra']],ro)}${opt('handover_condition','So với chuẩn khi CSH bàn giao cho CĐT',c.handover_condition,[['BELOW_STANDARD','Dưới chuẩn'],['MEETS_STANDARD','Đạt chuẩn'],['ABOVE_STANDARD','Tốt hơn chuẩn']],ro)}${opt('repair_status','Xử lý chênh lệch mặt bằng',c.repair_status,[['NOT_REQUIRED','Không cần'],['RECORDED','Đã ghi nhận'],['IN_REPAIR','Đang xử lý'],['COMPLETED','Đã hoàn tất']],ro)}</section>`;
+const close=`<section class="section"><h2>Điều kiện đóng case</h2>${opt('debt_status','Công nợ',c.debt_status,[['UNKNOWN','Chưa xác định'],['PENDING','Đang xử lý'],['CLEARED','Đã xử lý'],['NOT_APPLICABLE','Không áp dụng']],ro)}${opt('document_status','Hồ sơ',c.document_status,[['UNKNOWN','Chưa xác định'],['PENDING','Đang xử lý'],['COMPLETE','Hoàn tất'],['NOT_APPLICABLE','Không áp dụng']],ro)}${opt('bql_confirmation_status','Ban quản lý xác nhận',c.bql_confirmation_status,[['PENDING','Chưa xác nhận'],['CONFIRMED','Đã xác nhận'],['NOT_APPLICABLE','Không áp dụng']],ro)}${textField('completion_ref','Mã/biên bản bàn giao hoặc bằng chứng hoàn tất',c.completion_ref,ro,false)}<p class="hint">Hệ thống tự chuyển sang Hoàn tất khi đủ điều kiện áp dụng. Không có nút tự chọn Hoàn tất.</p></section>`;
+const issue=`<section class="section"><h2>Vướng mắc / đề xuất</h2>${opt('issue_type','Loại vướng mắc',c.issue_type,[['Nghiệp vụ','Nghiệp vụ'],['Hồ sơ','Hồ sơ'],['Công nợ','Công nợ'],['Mặt bằng','Mặt bằng'],['HĐT2','HĐT2'],['Khác','Khác']],ro)}${textField('issue_text','Nội dung',c.issue_text,ro,true)}${textField('proposal_text','Đề xuất xử lý',c.proposal_text,ro,true)}${opt('issue_priority','Mức độ',c.issue_priority,[['NORMAL','Bình thường'],['SOON','Cần xử lý sớm'],['URGENT','Khẩn']],ro)}${opt('issue_status','Trạng thái',c.issue_status,[['NEW','Mới ghi nhận'],['IN_PROGRESS','Đang xử lý'],['RESOLVED','Đã xử lý']],ro)}${opt('need_cbld_support','Cần CBLĐ hỗ trợ',String(c.need_cbld_support),[['false','Không'],['true','Có']],ro)}</section>`;
+q('detail-body').innerHTML=exceptionHtml+facts+branchForm+close+issue+(ro?'<div class="readonly-banner">Case đã hoàn tất — chỉ đọc.</div>':'<div class="actions"><button id="save" class="primary">Lưu cập nhật</button></div>');if(!ro)q('save').onclick=saveCase;}
+
+async function saveCase(){const btn=q('save');btn.disabled=true;btn.textContent='Đang lưu…';try{const changes={};document.querySelectorAll('#detail-body [data-field]').forEach(el=>{if(el.value!=='')changes[el.dataset.field]=el.dataset.field==='need_cbld_support'?el.value==='true':el.value;});await rpc('csh_update_case',{p_shop_id:S.current.case.shop_id,p_cbld:S.cbld,p_cskh:S.cskh,p_session_id:S.sessionId,p_changes:changes});await loadAll();show('workspace');}catch(e){alert(e.message||'Không lưu được dữ liệu');btn.disabled=false;btn.textContent='Lưu cập nhật';}}
+function branch(v){return ({BEFORE_CKTT:'HĐT2 hết trước CKTT',SAME_AS_CKTT:'HĐT2 hết cùng CKTT',AFTER_CKTT:'HĐT2 còn hiệu lực sau CKTT',NO_HDT2:'Không có HĐT2',DATA_EXCEPTION:'Dữ liệu HĐT2 cần rà soát'})[v]||'Chưa xác định';}
+function warning(v){return ({HDT2_DATA_EXCEPTION:'Dữ liệu HĐT2 cần rà soát',CKTT_OVERDUE:'Đã quá hạn CKTT',CBLD_SUPPORT_REQUIRED:'Cần CBLĐ hỗ trợ',CKTT_T7:'Còn tối đa 7 ngày',CKTT_T15:'Còn tối đa 15 ngày'})[v]||v;}
+
+q('enter').onclick=async()=>{await loadAll();show('workspace');};q('back').onclick=()=>show('selector');q('detail-back').onclick=()=>show('workspace');document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.filter=b.dataset.filter;renderList();});
 init().catch(e=>{console.error(e);alert(e.message||'Không tải được dữ liệu');});
