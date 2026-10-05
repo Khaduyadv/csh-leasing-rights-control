@@ -16,11 +16,19 @@ export const branchLabels = {
 // RPCs (v_case_control carries no row-level exception/history columns) — they stay empty until a
 // case is opened and enriched via `enrichWithCaseDetail` below.
 export function adaptBackendCase(row) {
+  const allowedPriorityBuckets = new Set(['OVERDUE', 'T7', 'T15', 'T30', 'T45', null]);
+  if (!Number.isInteger(row.computed_priority_rank)) {
+    throw new Error('CONTRACT_ERROR: computed_priority_rank must be an integer');
+  }
+  if (!allowedPriorityBuckets.has(row.computed_priority_bucket ?? null)) {
+    throw new Error('CONTRACT_ERROR: computed_priority_bucket is invalid');
+  }
   const completed = row.effective_case_status === 'COMPLETED';
   return {
     id: row.shop_id, shop: row.shop_id, projectCode: row.project_code, zone: row.zone,
     cs: row.cskh_name, director: row.cbld_name, branch: row.computed_hdt2_branch,
     days: row.computed_days_to_cktt,
+    priorityBucket: row.computed_priority_bucket ?? null, priorityRank: row.computed_priority_rank,
     status: completed ? 'COMPLETED' : 'ACTIVE',
     onboardedT45: Boolean(row.computed_is_onboarded),
     requiresHumanAuthority: row.computed_hdt2_branch === 'DATA_EXCEPTION',
@@ -95,9 +103,7 @@ export function closureProgress(c) {
   return { gates, completed: !humanAuthority && gates.every(g => g.done), humanAuthority, doneCount: gates.filter(g => g.done).length, total: gates.length };
 }
 
-const bucketRank = c => c.status === 'COMPLETED' ? 6 : c.days == null ? 9 : c.days < 0 ? 0 : c.days <= 7 ? 1 : c.days <= 15 ? 2 : c.days <= 30 ? 3 : c.days <= 45 ? 4 : 5;
-const tieRank = c => c.branch === 'AFTER_CKTT' ? 0 : c.branch === 'DATA_EXCEPTION' ? 1 : c.issueStatus && c.issueStatus !== 'RESOLVED' ? 2 : c.supportNeeded === true ? 3 : closureProgress(c).completed ? 5 : 4;
-export const priority = c => bucketRank(c) * 10 + tieRank(c);
+export const priority = c => c.priorityRank;
 export const dueLabel = c => c.status === 'COMPLETED' ? `Đã đóng ${c.completedAt || ''}`.trim() : c.days == null ? 'Chưa trong T-45' : c.days < 0 ? `Quá hạn ${Math.abs(c.days)} ngày` : `T-${c.days}`;
 export const caseState = c => c.status === 'COMPLETED' ? 'Đã hoàn tất · chỉ xem' : 'Đang xử lý';
 export const branchFields = c => {
@@ -105,4 +111,4 @@ export const branchFields = c => {
   if (['NO_HDT2', 'BEFORE_CKTT', 'SAME_AS_CKTT'].includes(c.branch)) return ['Thông báo CSH', 'Ngày / lịch bàn giao mặt bằng', 'Tình trạng hiện trạng', 'Điều kiện đóng case'];
   return ['Dữ kiện cần xác minh', 'Nguồn đang xung đột hoặc còn thiếu', 'Người có thẩm quyền cần xác minh / quyết định'];
 };
-export const sortedCases = rows => [...rows].sort((a, b) => priority(a) - priority(b) || (a.days ?? 9999) - (b.days ?? 9999) || a.shop.localeCompare(b.shop, 'vi'));
+export const sortedCases = rows => [...rows].sort((a, b) => priority(a) - priority(b) || a.shop.localeCompare(b.shop, 'vi'));
