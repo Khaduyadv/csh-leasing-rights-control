@@ -10,6 +10,19 @@ export const branchLabels = {
   AFTER_CKTT: 'AFTER_CKTT', DATA_EXCEPTION: 'DATA_EXCEPTION'
 };
 
+const PRIORITY_BUCKETS = new Set(['OVERDUE', 'T7', 'T15', 'T30', 'T45', null]);
+
+function backendPriority(row) {
+  const bucket = row.computed_priority_bucket ?? null;
+  const rank = row.computed_priority_rank;
+  if (!PRIORITY_BUCKETS.has(bucket) || !Number.isInteger(rank)) {
+    const err = new Error('CONTRACT_ERROR: invalid computed priority contract');
+    err.code = 'CONTRACT_ERROR';
+    throw err;
+  }
+  return { bucket, rank };
+}
+
 // Adapts one `v_case_control` row (as returned by csh_get_workspace / csh_get_completed_cases /
 // csh_get_cbld_cases / csh_get_leadership_cases, or the `case` key of csh_get_case) into the shape
 // the existing UI rendering code expects. `history` and `exception` detail are not part of the list
@@ -17,10 +30,12 @@ export const branchLabels = {
 // case is opened and enriched via `enrichWithCaseDetail` below.
 export function adaptBackendCase(row) {
   const completed = row.effective_case_status === 'COMPLETED';
+  const { bucket: priorityBucket, rank: priorityRank } = backendPriority(row);
   return {
     id: row.shop_id, shop: row.shop_id, projectCode: row.project_code, zone: row.zone,
     cs: row.cskh_name, director: row.cbld_name, branch: row.computed_hdt2_branch,
     days: row.computed_days_to_cktt,
+    priorityBucket, priorityRank,
     status: completed ? 'COMPLETED' : 'ACTIVE',
     onboardedT45: Boolean(row.computed_is_onboarded),
     requiresHumanAuthority: row.computed_hdt2_branch === 'DATA_EXCEPTION',
@@ -95,9 +110,8 @@ export function closureProgress(c) {
   return { gates, completed: !humanAuthority && gates.every(g => g.done), humanAuthority, doneCount: gates.filter(g => g.done).length, total: gates.length };
 }
 
-const bucketRank = c => c.status === 'COMPLETED' ? 6 : c.days == null ? 9 : c.days < 0 ? 0 : c.days <= 7 ? 1 : c.days <= 15 ? 2 : c.days <= 30 ? 3 : c.days <= 45 ? 4 : 5;
-const tieRank = c => c.branch === 'AFTER_CKTT' ? 0 : c.branch === 'DATA_EXCEPTION' ? 1 : c.issueStatus && c.issueStatus !== 'RESOLVED' ? 2 : c.supportNeeded === true ? 3 : closureProgress(c).completed ? 5 : 4;
-export const priority = c => bucketRank(c) * 10 + tieRank(c);
+export const priority = c => c.priorityRank;
+export const priorityLabel = c => c.status === 'COMPLETED' ? '—' : c.priorityBucket ?? 'Ngoài T-45';
 export const dueLabel = c => c.status === 'COMPLETED' ? `Đã đóng ${c.completedAt || ''}`.trim() : c.days == null ? 'Chưa trong T-45' : c.days < 0 ? `Quá hạn ${Math.abs(c.days)} ngày` : `T-${c.days}`;
 export const caseState = c => c.status === 'COMPLETED' ? 'Đã hoàn tất · chỉ xem' : 'Đang xử lý';
 export const branchFields = c => {
@@ -105,4 +119,4 @@ export const branchFields = c => {
   if (['NO_HDT2', 'BEFORE_CKTT', 'SAME_AS_CKTT'].includes(c.branch)) return ['Thông báo CSH', 'Ngày / lịch bàn giao mặt bằng', 'Tình trạng hiện trạng', 'Điều kiện đóng case'];
   return ['Dữ kiện cần xác minh', 'Nguồn đang xung đột hoặc còn thiếu', 'Người có thẩm quyền cần xác minh / quyết định'];
 };
-export const sortedCases = rows => [...rows].sort((a, b) => priority(a) - priority(b) || (a.days ?? 9999) - (b.days ?? 9999) || a.shop.localeCompare(b.shop, 'vi'));
+export const sortedCases = rows => [...rows].sort((a, b) => priority(a) - priority(b) || a.shop.localeCompare(b.shop, 'vi'));
