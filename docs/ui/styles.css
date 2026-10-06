@@ -7,3 +7,15 @@
 .icon-button{width:44px;height:44px}.filter-chip{min-height:44px}.filter-row{overflow-x:visible;flex-wrap:wrap}
 .synthetic-test-section{min-width:0}@media(max-width:650px){.filter-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.filter-chip{min-width:0;padding:7px 5px;white-space:nowrap}}
 :root{--context-error-bg:#faeae6;--context-error-ink:#9b4037}.context-error{margin:10px 0;padding:10px 12px;border-radius:10px;background:var(--context-error-bg);color:var(--context-error-ink);font-size:12px}.pill.onboarding-state{background:#edf2ee;color:#617267}
+
+/* ---- Gọn gàng: ô "i", nhãn ẩn, cảm ứng ---- */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.info-wrap{display:inline-block;position:relative;vertical-align:middle;margin-left:4px;font-weight:400;letter-spacing:0;text-transform:none}
+.info-btn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;min-height:22px;padding:0;border-radius:50%;border:1.5px solid #4f7a63;background:#fff;color:#2f6a4c;font:italic 700 13px/1 Georgia,serif;cursor:pointer}
+.info-btn::after{content:"";position:absolute;inset:-11px}
+.info-btn:focus-visible{outline:2px solid #2f6a4c;outline-offset:2px}
+.info-btn[aria-expanded="true"]{background:#2f6a4c;color:#fff}
+.info-pop{position:fixed;z-index:60;width:max-content;max-width:min(280px,calc(100vw - 16px));padding:10px 12px;border-radius:10px;background:#17251f;color:#fff;font-size:12px;line-height:1.45;font-weight:400;font-style:normal;text-align:left;box-shadow:0 8px 24px #0003}
+.info-pop[hidden]{display:none}
+.entry-card select{width:100%;min-height:48px;margin-bottom:16px}
+@media(max-width:650px){select{font-size:16px}}
