@@ -4,28 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f6f7f4">
-  <title>CSH Leasing Rights Control — Production</title>
+  <title>Quản lý quyền cho thuê CSH</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="interactive.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#home" aria-label="CSH Leasing Rights Control, về đầu trang">
+      <a class="brand" href="#home" aria-label="Quản lý quyền cho thuê CSH, về đầu trang">
         <span class="brand-mark" aria-hidden="true">C</span>
-        <span><strong>CSH</strong><small>LEASING RIGHTS CONTROL</small></span>
+        <span><strong>CSH</strong><small>QUẢN LÝ QUYỀN CHO THUÊ</small></span>
       </a>
-      <div class="topbar-right"><span class="sandbox-tag live-tag"><i></i> PRODUCTION</span><button class="icon-button" id="helpButton" aria-label="Thông tin hệ thống" title="Thông tin hệ thống">?</button></div>
+      <div class="topbar-right"><span class="sandbox-tag live-tag"><i></i> VẬN HÀNH</span><button class="icon-button" id="helpButton" aria-label="Thông tin hệ thống" title="Thông tin hệ thống">?</button></div>
     </header>
     <main id="app" aria-live="polite"></main>
-    <footer class="app-footer"><span>CSH Leasing Rights Control</span><span>CSH Production Backend · dữ liệu và quy tắc nghiệp vụ do backend tính và xác thực</span></footer>
+    <footer class="app-footer"><span>Quản lý quyền cho thuê CSH</span><span>Đơn vị quản lý: BQL VCO Ocean City</span></footer>
   </div>
-  <dialog id="helpDialog" class="help-dialog"><button class="dialog-close" data-close aria-label="Đóng">×</button><p class="eyebrow">CSH PRODUCTION</p><h2>Kết nối CSH Production Backend</h2><p>Branch, ưu tiên, việc tiếp theo và trạng thái hoàn tất do backend tính và trả về — giao diện không tự suy ra hay ghi đè các giá trị này. CBLĐ/CSKH được chọn là ngữ cảnh workspace; backend xác thực lại toàn bộ cặp CBLĐ/CSKH và phạm vi case ở mọi lần đọc và ghi. Mọi thay đổi được ghi trực tiếp vào CSH Production Backend qua RPC đã được kiểm soát quyền.</p><button class="button primary" data-close>Đã hiểu</button></dialog>
+  <dialog id="helpDialog" class="help-dialog"><button class="dialog-close" data-close aria-label="Đóng">×</button><p class="eyebrow">DỮ LIỆU VẬN HÀNH CSH</p><h2>Dữ liệu vận hành CSH</h2><p>Nhánh, mức ưu tiên, việc tiếp theo và trạng thái hoàn tất do hệ thống tính; giao diện chỉ hiển thị. CBLĐ/CSKH là phạm vi làm việc, được hệ thống kiểm tra lại ở mỗi lần xem và ghi. Mọi thay đổi được ghi qua cổng kiểm soát quyền.</p><button class="button primary" data-close>Đã hiểu</button></dialog>
   <script>
     (() => {
       const app = document.querySelector('#app');
       const showStartupError = (title, message) => {
-        app.innerHTML = `<section role="alert" style="max-width:680px;margin:48px auto;padding:28px;border:1px solid #d9ded8;border-radius:16px;background:#fff;color:#24302a;font:16px/1.55 system-ui,sans-serif"><p style="margin:0 0 8px;color:#587260;font-size:12px;font-weight:700;letter-spacing:.12em">CSH · PRODUCTION</p><h1 style="margin:0 0 12px;font-size:24px">${title}</h1><p style="margin:0">${message}</p></section>`;
+        app.innerHTML = `<section role="alert" style="max-width:680px;margin:48px auto;padding:28px;border:1px solid #d9ded8;border-radius:16px;background:#fff;color:#24302a;font:16px/1.55 system-ui,sans-serif"><p style="margin:0 0 8px;color:#587260;font-size:12px;font-weight:700;letter-spacing:.12em">CSH · VẬN HÀNH</p><h1 style="margin:0 0 12px;font-size:24px">${title}</h1><p style="margin:0">${message}</p></section>`;
       };
       if (location.protocol === 'file:') {
         showStartupError('Cần chạy qua máy chủ HTTP(S)', 'Trình duyệt không cho tải các ES module bằng cách mở trực tiếp file://. Hãy phục vụ ứng dụng qua HTTP(S) rồi tải lại.');
